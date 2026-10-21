@@ -33,7 +33,8 @@ import com.mpazpro3.app.viewmodel.MpazProViewModel
  * contenidos curriculares con filtros por asignatura y por estado. Tocar un contenido abre su
  * detalle para aprobarlo o rechazarlo.
  *
- * TODO(equipo): viewModel.contenidosFiltrados() todavía no filtra.
+ * RF-02: la lista sale de viewModel.contenidosFiltrados() (Room). Si no hay resultados se
+ * muestra "No hay contenidos con esos filtros".
  */
 @Composable
 fun ContenidosUtpScreen(
@@ -41,10 +42,10 @@ fun ContenidosUtpScreen(
     viewModel: MpazProViewModel,
     onCerrarSesion: () -> Unit
 ) {
-    val todos by viewModel.contenidos.collectAsState()
     var asignatura by remember { mutableStateOf<Asignatura?>(null) }
     var estado by remember { mutableStateOf<EstadoAprobacion?>(null) }
-    val lista = remember(todos, asignatura, estado) { viewModel.contenidosFiltrados(asignatura, estado) }
+    val lista by remember(asignatura, estado) { viewModel.contenidosFiltrados(asignatura, estado) }
+        .collectAsState(initial = emptyList())
 
     Scaffold(topBar = { BarraSuperior("Autorización de contenidos", navController, onCerrarSesion) }) { padding ->
         Column(
@@ -70,6 +71,14 @@ fun ContenidosUtpScreen(
                 onSeleccion = { estado = it },
                 textoVacio = "Todos los estados"
             )
+
+            if (lista.isEmpty()) {
+                Text(
+                    "No hay contenidos con esos filtros",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+            }
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
