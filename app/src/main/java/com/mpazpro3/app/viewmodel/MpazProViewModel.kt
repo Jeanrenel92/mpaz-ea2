@@ -1,7 +1,12 @@
 package com.mpazpro3.app.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.mpazpro3.app.data.MockData
+import com.mpazpro3.app.data.local.AppDatabase
+import com.mpazpro3.app.data.local.cargarDatosInicialesSiVacia
+import com.mpazpro3.app.data.repository.ContenidoRepository
 import com.mpazpro3.app.model.Actividad
 import com.mpazpro3.app.model.Asignacion
 import com.mpazpro3.app.model.Asignatura
@@ -14,9 +19,13 @@ import com.mpazpro3.app.model.RecursoDidactico
 import com.mpazpro3.app.model.RespuestaEstudiante
 import com.mpazpro3.app.model.SeguimientoAvance
 import com.mpazpro3.app.model.Usuario
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
  * ViewModel único, compartido por todas las pantallas (se crea una sola vez en AppNavigation).
@@ -26,7 +35,16 @@ import kotlinx.coroutines.flow.asStateFlow
  * Requerimientos_Seccion007 al que corresponde. Mientras no se implemente, las listas se
  * muestran sin filtrar y las acciones (aprobar, asignar, responder, validar) no cambian nada.
  */
-class MpazProViewModel : ViewModel() {
+class MpazProViewModel(application: Application) : AndroidViewModel(application) {
+
+    // Room + Repository de contenidos. Debe declararse antes de las propiedades que lo usan.
+    private val contenidoDao = AppDatabase.obtener(application).contenidoDao()
+    private val contenidoRepository = ContenidoRepository(contenidoDao)
+
+    init {
+        // Primera ejecución: carga los contenidos de ejemplo en Room si la tabla está vacía.
+        viewModelScope.launch { cargarDatosInicialesSiVacia(contenidoDao) }
+    }
 
     // =====================================================================
     // Autenticación
@@ -69,8 +87,8 @@ class MpazProViewModel : ViewModel() {
     // Datos compartidos y selección (no es lógica de negocio)
     // =====================================================================
 
-    private val _contenidos = MutableStateFlow(MockData.contenidos)
-    val contenidos: StateFlow<List<Contenido>> = _contenidos.asStateFlow()
+    val contenidos: StateFlow<List<Contenido>> = contenidoRepository.contenidos
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _recursos = MutableStateFlow(MockData.recursos)
     private val _actividades = MutableStateFlow(MockData.actividades)
@@ -101,7 +119,7 @@ class MpazProViewModel : ViewModel() {
         _estudianteSeleccionadoId.value = id
     }
 
-    fun contenidoPorId(id: String?): Contenido? = _contenidos.value.find { it.id == id }
+    fun contenidoPorId(id: String?): Contenido? = contenidos.value.find { it.id == id }
 
     fun estudiantePorId(id: String?): Estudiante? = _estudiantes.value.find { it.id == id }
 
@@ -115,22 +133,27 @@ class MpazProViewModel : ViewModel() {
     // =====================================================================
 
     /**
-     * TODO(equipo): filtrar por asignatura y por estado (null = todos). Hoy devuelve todo.
+     * RF-02: contenidos filtrados por asignatura y por estado (null = todos). Se vuelve a
+     * emitir cuando cambian los datos en Room.
      */
-    fun contenidosFiltrados(asignatura: Asignatura?, estado: EstadoAprobacion?): List<Contenido> = _contenidos.value
+    fun contenidosFiltrados(asignatura: Asignatura?, estado: EstadoAprobacion?): Flow<List<Contenido>> =
+        contenidoRepository.filtrar(asignatura, estado)
 
     /**
-     * TODO(equipo): cambiar el estado del contenido a APROBADO y guardar la observación.
-     * RF: "UTP debe poder revisar y autorizar/rechazar un contenido" y "registrar el estado de
-     * aprobación de cada contenido". Hoy no hace nada.
+     * RF-01 / RF-02: cambia el estado del contenido a APROBADO y guarda la observación en Room.
+     * La pantalla se actualiza sola porque `contenidos` viene de un Flow del DAO.
      */
     fun aprobarContenido(contenidoId: String, observacion: String) {
-        // Sin implementar todavía.
+        viewModelScope.launch {
+            contenidoRepository.actualizarEstado(contenidoId, EstadoAprobacion.APROBADO, observacion)
+        }
     }
 
-    /** TODO(equipo): igual que aprobarContenido(), pero con estado RECHAZADO. Hoy no hace nada. */
+    /** RF-01 / RF-02: igual que aprobarContenido(), pero con estado RECHAZADO. */
     fun rechazarContenido(contenidoId: String, observacion: String) {
-        // Sin implementar todavía.
+        viewModelScope.launch {
+            contenidoRepository.actualizarEstado(contenidoId, EstadoAprobacion.RECHAZADO, observacion)
+        }
     }
 
     // =====================================================================
@@ -141,7 +164,7 @@ class MpazProViewModel : ViewModel() {
      * TODO(equipo): devolver SOLO los contenidos APROBADOS por UTP (regla de negocio: un
      * contenido no autorizado no puede asignarse). Hoy devuelve todos.
      */
-    fun contenidosDisponiblesParaAsignar(): List<Contenido> = _contenidos.value
+    fun contenidosDisponiblesParaAsignar(): List<Contenido> = contenidos.value
 
     /**
      * TODO(equipo): crear las asignaciones del curso para los contenidos elegidos, con el máximo
@@ -201,7 +224,7 @@ class MpazProViewModel : ViewModel() {
      * TODO(equipo): devolver solo los contenidos asignados al curso del estudiante. Hoy devuelve
      * todos. Regla: el estudiante no puede modificar contenidos ni ver el informe pedagógico.
      */
-    fun contenidosDelEstudiante(usuario: Usuario?): List<Contenido> = _contenidos.value
+    fun contenidosDelEstudiante(usuario: Usuario?): List<Contenido> = contenidos.value
 
     /** TODO(equipo): avance del estudiante en el contenido (0.0 a 1.0). Hoy devuelve 0. */
     fun progreso(estudianteId: String, contenidoId: String): Float = 0f
