@@ -30,4 +30,8 @@ class ContenidoRepository(private val dao: ContenidoDao) {
     /** RF-01 / RF-02: guarda en Room el estado de aprobación y la observación de UTP. */
     suspend fun actualizarEstado(id: String, estado: EstadoAprobacion, observacion: String) =
         dao.actualizarEstado(id, estado.name, observacion)
+
+    /** RN-04: cuántas unidades APROBADAS tiene la asignatura, sin contar el contenido indicado. */
+    suspend fun contarAprobadosPorAsignatura(asignatura: Asignatura, idExcluido: String): Int =
+        dao.contarAprobadosPorAsignatura(asignatura.name, idExcluido)
 }
