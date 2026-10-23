@@ -168,10 +168,22 @@ class MpazProViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /** RF-01: el rechazo exige motivo. Devuelve true si se puede continuar. */
+    fun validarRechazo(observacion: String): Boolean {
+        if (observacion.isBlank()) {
+            _errorObservacion.value = "Indica el motivo del rechazo"
+            return false
+        }
+        _errorObservacion.value = null
+        return true
+    }
+
     /** RF-01 / RF-02: igual que aprobarContenido(), pero con estado RECHAZADO. */
     fun rechazarContenido(contenidoId: String, observacion: String) {
+        if (!validarRechazo(observacion)) return
         viewModelScope.launch {
             contenidoRepository.actualizarEstado(contenidoId, EstadoAprobacion.RECHAZADO, observacion)
+            _mensajeUtp.value = "Contenido rechazado"
         }
     }
 
