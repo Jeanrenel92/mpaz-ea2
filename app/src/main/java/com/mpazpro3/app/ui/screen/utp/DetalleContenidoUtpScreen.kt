@@ -43,6 +43,7 @@ fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazP
     val seleccionadoId by viewModel.contenidoSeleccionadoId.collectAsState()
     val contenidos by viewModel.contenidos.collectAsState()
     val errorObservacion by viewModel.errorObservacion.collectAsState()
+    val mensaje by viewModel.mensajeUtp.collectAsState()
     val contenido = contenidos.find { it.id == seleccionadoId }
 
     Scaffold(topBar = { BarraSuperior("Revisar contenido", navController) }) { padding ->
@@ -119,6 +120,9 @@ fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazP
                         if (viewModel.validarRechazo(observacion.trim())) mostrarDialogoRechazo = true
                     }
                 ) { Text("Rechazar") }
+            }
+            mensaje?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
             }
             if (mostrarDialogoRechazo) {
                 AlertDialog(
