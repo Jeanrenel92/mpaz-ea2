@@ -163,8 +163,17 @@ class MpazProViewModel(application: Application) : AndroidViewModel(application)
      * La pantalla se actualiza sola porque `contenidos` viene de un Flow del DAO.
      */
     fun aprobarContenido(contenidoId: String, observacion: String) {
+        val contenido = contenidoPorId(contenidoId) ?: return
         viewModelScope.launch {
+            // RN-01: máximo una unidad aprobada por asignatura
+            val otrosAprobados = contenidoRepository.contarAprobadosPorAsignatura(contenido.asignatura, contenidoId)
+            if (otrosAprobados > 0) {
+                _mensajeUtp.value = "Ya existe una unidad aprobada para esta asignatura"
+                return@launch
+            }
             contenidoRepository.actualizarEstado(contenidoId, EstadoAprobacion.APROBADO, observacion)
+            _errorObservacion.value = null
+            _mensajeUtp.value = "Contenido aprobado"
         }
     }
 
