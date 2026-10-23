@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.mpazpro3.app.ui.components.BarraSuperior
 import com.mpazpro3.app.viewmodel.MpazProViewModel
+import androidx.compose.runtime.LaunchedEffect
 
 /**
  * Detalle de un contenido para UTP: datos curriculares completos, recursos didácticos asociados,
@@ -38,6 +39,7 @@ import com.mpazpro3.app.viewmodel.MpazProViewModel
 fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazProViewModel) {
     val seleccionadoId by viewModel.contenidoSeleccionadoId.collectAsState()
     val contenidos by viewModel.contenidos.collectAsState()
+    val errorObservacion by viewModel.errorObservacion.collectAsState()
     val contenido = contenidos.find { it.id == seleccionadoId }
 
     Scaffold(topBar = { BarraSuperior("Revisar contenido", navController) }) { padding ->
@@ -46,6 +48,7 @@ fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazP
             return@Scaffold
         }
         val recursos = viewModel.recursosDe(contenido.id)
+        LaunchedEffect(contenido.id) { viewModel.limpiarMensajesUtp() }
         var observacion by remember(contenido.id) { mutableStateOf(contenido.observacionUtp) }
 
         Column(
@@ -90,8 +93,13 @@ fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazP
 
             OutlinedTextField(
                 value = observacion,
-                onValueChange = { observacion = it },
+                onValueChange = {
+                    observacion = it
+                    viewModel.limpiarErrorObservacion()
+                },
                 label = { Text("Observación de UTP") },
+                isError = errorObservacion != null,
+                supportingText = { errorObservacion?.let { Text(it) } },
                 minLines = 2,
                 modifier = Modifier.fillMaxWidth()
             )
