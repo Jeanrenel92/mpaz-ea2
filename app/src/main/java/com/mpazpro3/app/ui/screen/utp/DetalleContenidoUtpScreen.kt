@@ -8,7 +8,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -28,7 +31,7 @@ import androidx.navigation.NavHostController
 import com.mpazpro3.app.ui.components.BarraSuperior
 import com.mpazpro3.app.viewmodel.MpazProViewModel
 import androidx.compose.runtime.LaunchedEffect
-
+import androidx.compose.material3.Button
 /**
  * Detalle de un contenido para UTP: datos curriculares completos, recursos didácticos asociados,
  * observación y botones Aprobar / Rechazar.
@@ -50,6 +53,7 @@ fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazP
         val recursos = viewModel.recursosDe(contenido.id)
         LaunchedEffect(contenido.id) { viewModel.limpiarMensajesUtp() }
         var observacion by remember(contenido.id) { mutableStateOf(contenido.observacionUtp) }
+        var mostrarDialogoRechazo by remember { mutableStateOf(false) }
 
         Column(
             modifier = Modifier
@@ -111,8 +115,26 @@ fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazP
                 ) { Text("Aprobar") }
                 OutlinedButton(
                     modifier = Modifier.weight(1f),
-                    onClick = { viewModel.rechazarContenido(contenido.id, observacion.trim()) }
+                    onClick = {
+                        if (viewModel.validarRechazo(observacion.trim())) mostrarDialogoRechazo = true
+                    }
                 ) { Text("Rechazar") }
+            }
+            if (mostrarDialogoRechazo) {
+                AlertDialog(
+                    onDismissRequest = { mostrarDialogoRechazo = false },
+                    title = { Text("¿Rechazar contenido?") },
+                    text = { Text("El contenido quedará como rechazado y no podrá ser asignado por los docentes.") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            viewModel.rechazarContenido(contenido.id, observacion.trim())
+                            mostrarDialogoRechazo = false
+                        }) { Text("Rechazar") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { mostrarDialogoRechazo = false }) { Text("Cancelar") }
+                    }
+                )
             }
         }
     }
