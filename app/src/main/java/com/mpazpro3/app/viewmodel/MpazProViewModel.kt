@@ -139,6 +139,25 @@ class MpazProViewModel(application: Application) : AndroidViewModel(application)
     fun contenidosFiltrados(asignatura: Asignatura?, estado: EstadoAprobacion?): Flow<List<Contenido>> =
         contenidoRepository.filtrar(asignatura, estado)
 
+    /** Error que se muestra debajo del campo de observación (null = sin error). */
+    private val _errorObservacion = MutableStateFlow<String?>(null)
+    val errorObservacion: StateFlow<String?> = _errorObservacion.asStateFlow()
+
+    /** Mensaje general para UTP: éxito o error de una regla de negocio (null = nada). */
+    private val _mensajeUtp = MutableStateFlow<String?>(null)
+    val mensajeUtp: StateFlow<String?> = _mensajeUtp.asStateFlow()
+
+    /** Al escribir en el campo se limpia su error. */
+    fun limpiarErrorObservacion() {
+        _errorObservacion.value = null
+    }
+
+    /** Al abrir otro contenido se limpian los mensajes anteriores. */
+    fun limpiarMensajesUtp() {
+        _errorObservacion.value = null
+        _mensajeUtp.value = null
+    }
+
     /**
      * RF-01 / RF-02: cambia el estado del contenido a APROBADO y guarda la observación en Room.
      * La pantalla se actualiza sola porque `contenidos` viene de un Flow del DAO.
