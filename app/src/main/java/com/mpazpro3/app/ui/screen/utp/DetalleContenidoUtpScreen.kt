@@ -1,5 +1,15 @@
 package com.mpazpro3.app.ui.screen.utp
 
+import android.content.Context
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,22 +33,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.mpazpro3.app.ui.components.BarraSuperior
 import com.mpazpro3.app.viewmodel.MpazProViewModel
 
-/**
- * Detalle de un contenido para UTP: datos curriculares completos, recursos didácticos asociados,
- * observación y botones Aprobar / Rechazar.
- *
- * TODO(equipo): aprobarContenido() y rechazarContenido() todavía no cambian el estado.
- */
 @Composable
 fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazProViewModel) {
     val seleccionadoId by viewModel.contenidoSeleccionadoId.collectAsState()
     val contenidos by viewModel.contenidos.collectAsState()
-    val contenido = contenidos.find { it.id == seleccionadoId }
+    val contenido = contenidos.find { it.id == seleccionadoId}
+
+    // 1. Variables para el recurso nativo (Vibración)
+    val context = LocalContext.current
+    val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
     Scaffold(topBar = { BarraSuperior("Revisar contenido", navController) }) { padding ->
         if (contenido == null) {
@@ -47,6 +57,19 @@ fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazP
         }
         val recursos = viewModel.recursosDe(contenido.id)
         var observacion by remember(contenido.id) { mutableStateOf(contenido.observacionUtp) }
+
+        // 2. Estado para mostrar la animación del mensaje
+        var mostrarMensaje by remember { mutableStateOf(false) }
+
+        // Función reutilizable para ejecutar la vibración
+        val vibrar = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(100)
+            }
+        }
 
         Column(
             modifier = Modifier
@@ -65,7 +88,22 @@ fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazP
                     Dato("Código OA", contenido.codigoOA ?: "Sin código")
                     Dato("Eje curricular", contenido.ejeCurricular)
                     Dato("Recurso de referencia", contenido.recursoReferencia)
-                    Dato("Estado", contenido.estado.etiqueta)
+
+                    // 3. Animación de color fluido para el estado
+                    val colorEstado by animateColorAsState(
+                        targetValue = when (contenido.estado.etiqueta) {
+                            "Aprobado" -> Color(0xFF4CAF50) // Verde
+                            "Rechazado" -> Color(0xFFF44336) // Rojo
+                            else -> Color.Gray
+                        },
+                        animationSpec = tween(durationMillis = 500),
+                        label = "colorAnimado"
+                    )
+                    Text(
+                        text = "Estado: ${contenido.estado.etiqueta}",
+                        color = colorEstado,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
             }
 
@@ -99,12 +137,37 @@ fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazP
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
                     modifier = Modifier.weight(1f),
-                    onClick = { viewModel.aprobarContenido(contenido.id, observacion.trim()) }
+                    onClick = {
+                        vibrar() // Detona la vibración
+                        viewModel.aprobarContenido(contenido.id, observacion.trim())
+                        mostrarMensaje = true // Detona la animación del mensaje
+                    }
                 ) { Text("Aprobar") }
+
                 OutlinedButton(
                     modifier = Modifier.weight(1f),
-                    onClick = { viewModel.rechazarContenido(contenido.id, observacion.trim()) }
+                    onClick = {
+                        vibrar() // Detona la vibración
+                        viewModel.rechazarContenido(contenido.id, observacion.trim())
+                        mostrarMensaje = true // Detona la animación del mensaje
+                    }
                 ) { Text("Rechazar") }
+            }
+
+            // 4. Animación de aparición (fade in/out) para el mensaje de éxito
+            AnimatedVisibility(
+                visible = mostrarMensaje,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Text(
+                    text = "Estado del contenido actualizado",
+                    color = Color.White,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF4CAF50), shape = MaterialTheme.shapes.small)
+                        .padding(12.dp)
+                )
             }
         }
     }
