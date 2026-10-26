@@ -139,20 +139,60 @@ class MpazProViewModel(application: Application) : AndroidViewModel(application)
     fun contenidosFiltrados(asignatura: Asignatura?, estado: EstadoAprobacion?): Flow<List<Contenido>> =
         contenidoRepository.filtrar(asignatura, estado)
 
+    /** Error que se muestra debajo del campo de observación (null = sin error). */
+    private val _errorObservacion = MutableStateFlow<String?>(null)
+    val errorObservacion: StateFlow<String?> = _errorObservacion.asStateFlow()
+
+    /** Mensaje general para UTP: éxito o error de una regla de negocio (null = nada). */
+    private val _mensajeUtp = MutableStateFlow<String?>(null)
+    val mensajeUtp: StateFlow<String?> = _mensajeUtp.asStateFlow()
+
+    /** Al escribir en el campo se limpia su error. */
+    fun limpiarErrorObservacion() {
+        _errorObservacion.value = null
+    }
+
+    /** Al abrir otro contenido se limpian los mensajes anteriores. */
+    fun limpiarMensajesUtp() {
+        _errorObservacion.value = null
+        _mensajeUtp.value = null
+    }
+
     /**
      * RF-01 / RF-02: cambia el estado del contenido a APROBADO y guarda la observación en Room.
      * La pantalla se actualiza sola porque `contenidos` viene de un Flow del DAO.
      */
     fun aprobarContenido(contenidoId: String, observacion: String) {
+        val contenido = contenidoPorId(contenidoId) ?: return
         viewModelScope.launch {
+            // RN-04: máximo una unidad aprobada por asignatura
+            val otrosAprobados = contenidoRepository.contarAprobadosPorAsignatura(contenido.asignatura, contenidoId)
+            if (otrosAprobados > 0) {
+                _mensajeUtp.value = "Ya existe una unidad aprobada para esta asignatura"
+                return@launch
+            }
             contenidoRepository.actualizarEstado(contenidoId, EstadoAprobacion.APROBADO, observacion)
+            _errorObservacion.value = null
+            _mensajeUtp.value = "Contenido aprobado"
         }
+    }
+
+    /** RF-01: el rechazo exige motivo. Devuelve true si se puede continuar. */
+    fun validarRechazo(observacion: String): Boolean {
+        if (observacion.isBlank()) {
+            _errorObservacion.value = "Indica el motivo del rechazo"
+            return false
+        }
+        _errorObservacion.value = null
+        return true
     }
 
     /** RF-01 / RF-02: igual que aprobarContenido(), pero con estado RECHAZADO. */
     fun rechazarContenido(contenidoId: String, observacion: String) {
+        if (!validarRechazo(observacion)) return
         viewModelScope.launch {
             contenidoRepository.actualizarEstado(contenidoId, EstadoAprobacion.RECHAZADO, observacion)
+            _mensajeUtp.value = "Contenido rechazado"
         }
     }
 

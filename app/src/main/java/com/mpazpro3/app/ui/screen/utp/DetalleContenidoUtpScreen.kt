@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
@@ -26,7 +27,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,14 +40,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.mpazpro3.app.model.EstadoAprobacion
 import com.mpazpro3.app.ui.components.BarraSuperior
 import com.mpazpro3.app.viewmodel.MpazProViewModel
+
+/**
+ * Detalle de un contenido para UTP: datos curriculares completos, recursos didácticos asociados,
+ * observación y botones Aprobar / Rechazar.
+ *
+ */
 
 @Composable
 fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazProViewModel) {
     val seleccionadoId by viewModel.contenidoSeleccionadoId.collectAsState()
     val contenidos by viewModel.contenidos.collectAsState()
-    val contenido = contenidos.find { it.id == seleccionadoId}
+    val errorObservacion by viewModel.errorObservacion.collectAsState()
+    val mensaje by viewModel.mensajeUtp.collectAsState()
+    val contenido = contenidos.find { it.id == seleccionadoId }
+
 
     // 1. Variables para el recurso nativo (Vibración)
     val context = LocalContext.current
@@ -56,10 +69,11 @@ fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazP
             return@Scaffold
         }
         val recursos = viewModel.recursosDe(contenido.id)
+        LaunchedEffect(contenido.id) { viewModel.limpiarMensajesUtp() }
         var observacion by remember(contenido.id) { mutableStateOf(contenido.observacionUtp) }
+        var mostrarDialogoRechazo by remember { mutableStateOf(false) }
 
-        // 2. Estado para mostrar la animación del mensaje
-        var mostrarMensaje by remember { mutableStateOf(false) }
+
 
         // Función reutilizable para ejecutar la vibración
         val vibrar = {
@@ -69,6 +83,9 @@ fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazP
                 @Suppress("DEPRECATION")
                 vibrator.vibrate(100)
             }
+        }
+        LaunchedEffect(mensaje) {
+            if (mensaje != null) vibrar()
         }
 
         Column(
@@ -91,10 +108,10 @@ fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazP
 
                     // 3. Animación de color fluido para el estado
                     val colorEstado by animateColorAsState(
-                        targetValue = when (contenido.estado.etiqueta) {
-                            "Aprobado" -> Color(0xFF4CAF50) // Verde
-                            "Rechazado" -> Color(0xFFF44336) // Rojo
-                            else -> Color.Gray
+                        targetValue = when (contenido.estado) {
+                            EstadoAprobacion.APROBADO -> Color(0xFF4CAF50) // Verde
+                            EstadoAprobacion.RECHAZADO -> Color(0xFFF44336) // Rojo
+                            EstadoAprobacion.PENDIENTE -> Color.Gray
                         },
                         animationSpec = tween(durationMillis = 500),
                         label = "colorAnimado"
@@ -128,8 +145,13 @@ fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazP
 
             OutlinedTextField(
                 value = observacion,
-                onValueChange = { observacion = it },
+                onValueChange = {
+                    observacion = it
+                    viewModel.limpiarErrorObservacion()
+                },
                 label = { Text("Observación de UTP") },
+                isError = errorObservacion != null,
+                supportingText = { errorObservacion?.let { Text(it) } },
                 minLines = 2,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -138,35 +160,47 @@ fun DetalleContenidoUtpScreen(navController: NavHostController, viewModel: MpazP
                 Button(
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        vibrar() // Detona la vibración
                         viewModel.aprobarContenido(contenido.id, observacion.trim())
-                        mostrarMensaje = true // Detona la animación del mensaje
                     }
                 ) { Text("Aprobar") }
 
                 OutlinedButton(
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        vibrar() // Detona la vibración
-                        viewModel.rechazarContenido(contenido.id, observacion.trim())
-                        mostrarMensaje = true // Detona la animación del mensaje
+                        if (viewModel.validarRechazo(observacion.trim())) mostrarDialogoRechazo = true
                     }
                 ) { Text("Rechazar") }
             }
 
-            // 4. Animación de aparición (fade in/out) para el mensaje de éxito
             AnimatedVisibility(
-                visible = mostrarMensaje,
+                visible = mensaje != null,
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
                 Text(
-                    text = "Estado del contenido actualizado",
+                    text = mensaje.orEmpty(),
                     color = Color.White,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF4CAF50), shape = MaterialTheme.shapes.small)
+                        .background(MaterialTheme.colorScheme.primary, shape = MaterialTheme.shapes.small)
                         .padding(12.dp)
+                )
+            }
+
+            if (mostrarDialogoRechazo) {
+                AlertDialog(
+                    onDismissRequest = { mostrarDialogoRechazo = false },
+                    title = { Text("¿Rechazar contenido?") },
+                    text = { Text("El contenido quedará como rechazado y no podrá ser asignado por los docentes.") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            viewModel.rechazarContenido(contenido.id, observacion.trim())
+                            mostrarDialogoRechazo = false
+                        }) { Text("Rechazar") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { mostrarDialogoRechazo = false }) { Text("Cancelar") }
+                    }
                 )
             }
         }
