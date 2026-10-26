@@ -165,7 +165,7 @@ class MpazProViewModel(application: Application) : AndroidViewModel(application)
     fun aprobarContenido(contenidoId: String, observacion: String) {
         val contenido = contenidoPorId(contenidoId) ?: return
         viewModelScope.launch {
-            // RN-01: máximo una unidad aprobada por asignatura
+            // RN-04: máximo una unidad aprobada por asignatura
             val otrosAprobados = contenidoRepository.contarAprobadosPorAsignatura(contenido.asignatura, contenidoId)
             if (otrosAprobados > 0) {
                 _mensajeUtp.value = "Ya existe una unidad aprobada para esta asignatura"
